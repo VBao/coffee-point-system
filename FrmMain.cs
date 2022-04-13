@@ -74,7 +74,6 @@ namespace customer
             try
             {
                 Load_Data();
-                dtStart.Value = DateTime.Now.AddMonths(-1);
             }
             catch (Exception eLoad)
             {
@@ -88,14 +87,35 @@ namespace customer
         private void gvCustomers_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             PurchasedShowData();
-            txtSearch.Text = null;
+            txtITel.Enabled = false;
+            txtIName.Enabled = false;
+            // txtSearch.Text = null;
         }
 
         private void txtSearch_TextChanged(object sender, EventArgs e)
         {
+            txtIId.Enabled = false;
+            txtIName.Enabled = false;
             if (txtSearch.Text != null)
             {
-                _gvCus.RowFilter = "id LIKE '" + txtSearch.Text + "%'";
+                Regex re = new Regex(@"([a-zA-Z]+)(\d+)");
+                Match result = re.Match(txtSearch.Text);
+                // _gvCus.RowFilter = "id LIKE '" + txtSearch.Text + "%'";
+                _gvCus.RowFilter = "id LIKE '%" + result.Groups[2].Value + "%'" +
+                                   "and id LIKE '" + result.Groups[1].Value + "%'";
+                if (txtSearch.Text.Count(c => Char.IsDigit(c)) == 3)
+                {
+                    for (int i = 0; i < _gvCus.Count; i++)
+                    {
+                        string id = _gvCus[i]["id"].ToString();
+                        if (id.Count(x => Char.IsDigit(x)) != 3 && _gvCus.Count != 1)
+                        {
+                            MessageBox.Show(@"Có khách hàng có id đặc biệt");
+                            break;
+                        }
+                    }
+                }
+
                 if (_gvCus.Count == 1)
                 {
                     PurchasedShowData();
@@ -118,71 +138,99 @@ namespace customer
         // When "Cập nhật" button clicked
         private void btnPurchased_Click(object sender, EventArgs e)
         {
-            void Purchased(Int16[] cupIO)
+            string SetId(int len)
             {
-                _cv.ChangeErrNot(lbIPrice, false);
+                string id = txtIName.Text.Trim().Split(' ').Last().ToUpper() +
+                            txtITel.Text.Substring(txtITel.Text.Length - len);
+                return id;
+            }
+
+            void Purchased(Int16[] cupIo)
+            {
                 _cv.ChangeErrNot(lbIPrice, false);
                 _purchasedHistoryAdapter.Fill(_purchasedHistoryDt);
                 DataRow infoRow = _customerInformationDt.FirstOrDefault(b => b.id.Equals(txtIId.Text));
-
-                
-
-
                 DataRow purchasedRow = _purchasedHistoryDt.NewRow();
                 //Create new purchased Record
                 purchasedRow[1] = txtIId.Text;
-                purchasedRow[2] = cupIO[1] == 0 ? cupIO[0] < 0 ? cupIO[0] * 10 : cupIO[0] : cupIO[1];
+                if (cupIo[1] == 0)
+                    // purchasedRow[2] = cupIO[0] < 0 ? cupIO[0] * 10 : cupIO[0];
+                    purchasedRow[2] = cupIo[0];
+                else
+                {
+                    DataRow purchaseRow1 = _purchasedHistoryDt.NewRow();
+                    purchaseRow1[1] = txtIId.Text;
+                    purchaseRow1[2] = cupIo[0];
+                    purchaseRow1[3] = DateTime.Now;
+                    purchaseRow1[4] = 1;
+                    _purchasedHistoryDt.Rows.Add(purchaseRow1);
+                    purchasedRow[2] = cupIo[1];
+                }
+
                 purchasedRow[3] = DateTime.Now;
                 purchasedRow[4] = 1;
                 _purchasedHistoryDt.Rows.Add(purchasedRow);
                 _purchasedHistoryAdapter.Update(_purchasedHistoryDt);
 
-                //Update POINT in informationDatabase
-                if (infoRow != null)
+
+                // Check if name changed to update to database
+                string check;
+                if (txtIName.Enabled)
                 {
-                    if (cupIO[1] == 0)
+                    check = "Đổi tên từ: " + infoRow.Field<String>("name") + "\nSang: " + txtIName.Text;
+                    if (MessageBox.Show(check, @"Đổi tên", MessageBoxButtons.YesNo) == DialogResult.Yes)
                     {
-                        string check;
-                        // Check if name changed to update to database
-                        if (String.Compare(infoRow.Field<String>("name"), txtIName.Text) != 0)
-                        {
-                            check = "Đổi tên từ:" + infoRow.Field<String>("name") + "\nSang: " + txtIName.Text;
-                            if (MessageBox.Show(check, "Đổi tên", MessageBoxButtons.YesNo)==DialogResult.Yes)
-                            {
-                                infoRow["name"] = txtIName.Text;
-                                infoRow["id"] = txtIName.Text.Trim().Split(' ').Last() + txtITel.Text.Substring(txtITel.Text.Length - 3);;
-                                _customerInformationAdapter.Update(infoRow);
-                                txtIName.Enabled = false;
-
-                            }
-                        }
-
-                        if (String.Compare(infoRow.Field<String>("phone"),txtITel.Text)!=0)
-                        {
-                            check = "Đổi SĐT từ:" + infoRow.Field<String>("phone") + "\nSang: " + txtITel.Text;
-                            if (MessageBox.Show(check,"Đổi số điện thoại",MessageBoxButtons.YesNo)==DialogResult.Yes)
-                            {
-                                txtITel.Enabled = false;
-                            }
-                        }
-                        infoRow["id"] = txtIName.Text.Trim().Split(' ').Last() + txtITel.Text.Substring(txtITel.Text.Length - 3);;
-                        _customerInformationAdapter.Update(infoRow);
-                        infoRow["point"] = cupIO[0] < 0
-                            ? cupIO[0] * 10 + Convert.ToInt16(txtIPoint.Text)
-                            : cupIO[0] + Convert.ToInt16(txtIPoint.Text);
+                        infoRow["name"] = txtIName.Text.ToUpper();
                     }
-                    else
+                }
+
+                if (txtITel.Enabled)
+                {
+                    check = "Đổi SĐT từ: " + infoRow.Field<String>("phone") + "\nSang: " + txtITel.Text;
+                    if (MessageBox.Show(check, @"Đổi số điện thoại", MessageBoxButtons.YesNo) ==
+                        DialogResult.Yes)
                     {
-                        infoRow["point"] = cupIO[0] * 10 + cupIO[1] + Convert.ToInt16(txtIPoint.Text);
+                        infoRow["phone"] = txtITel.Text;
+                    }
+                }
+
+                void CreatId(int temptLen)
+                {
+                    try
+                    {
+                        infoRow["id"] = SetId(temptLen);
+                    }
+                    catch (ConstraintException)
+                    {
+                        temptLen++;
+                        CreatId(temptLen);
                     }
 
-                    _customerInformationAdapter.Update(_customerInformationDt);
+
+                }
+
+                if (txtIName.Enabled || txtITel.Enabled) { 
+                    CreatId(3);
+                    MessageBox.Show(@"Id của khách hàng là: " + infoRow["id"]);
+                }
+                _customerInformationAdapter.Update(infoRow);
+                txtITel.Enabled = false;
+                txtIName.Enabled = false;
+
+                if (cupIo[1] == 0)
+                {
+                    infoRow["point"] = cupIo[0] < 0
+                        ? cupIo[0] * 10 + Convert.ToInt32(txtIPoint.Text)
+                        : cupIo[0] + Convert.ToInt32(txtIPoint.Text);
                 }
                 else
                 {
-                    throw new UserException("Vui lòng liên hệ bộ phận hỗ trợ");
+                    infoRow["point"] = cupIo[0] * 10 + cupIo[1] + Convert.ToInt16(txtIPoint.Text);
                 }
 
+                _customerInformationAdapter.Update(_customerInformationDt);
+
+                txtSearch.Text = null;
                 Load_Data();
                 ResetTab();
             }
@@ -234,64 +282,44 @@ namespace customer
 
                 // DataRow infoRow = _customerInformationDt.NewRow();
                 //string name = txtCName.Text.Trim();
-                string id = txtCName.Text.Trim().Split(' ').Last() + txtCTel.Text.Substring(txtCTel.Text.Length - 3);
-                if (!Int16.TryParse(txtCCup.Text, out Int16 cup)) throw new UserException("Số lượng không hợp lệ");
+
+                string CreateId(int temptLen)
+                {
+                    string ids = txtCName.Text.Trim().Split(' ').Last().ToUpper() +
+                                 txtCTel.Text.Substring(txtCTel.Text.Length - temptLen);
+                    return ids;
+                }
+
                 int totalSpend = Convert.ToInt32(txtCCup.Text);
-                _customerInformationDt.AddcustomerInformationRow(id, txtCName.Text, _gender, txtCTel.Text, cup,
-                    totalSpend);
+                if (!Int16.TryParse(txtCCup.Text, out Int16 cup)) throw new UserException("Số lượng không hợp lệ");
+
+                string CreatCustomer(int tempLen)
+                {
+                    try
+                    {
+                        _customerInformationDt.AddcustomerInformationRow(CreateId(tempLen), txtCName.Text, _gender,
+                            txtCTel.Text, cup,
+                            totalSpend);
+                    }
+                    catch (ConstraintException)
+                    {
+                        tempLen++;
+                        CreatCustomer(tempLen);
+                    }
+
+                    return CreateId(tempLen);
+                }
+
+                string id = CreatCustomer(3);
                 _purchasedHistoryDt.AddpurchasedHistoryRow(id, cup, DateTime.Now, 1);
                 _customerInformationAdapter.Update(_customerInformationDt);
                 _purchasedHistoryAdapter.Update(_purchasedHistoryDt);
+                MessageBox.Show(@"Id của khách hàng là: " + id);
                 Load_Data();
                 ResetTab();
             }
         }
 
-        private void btnExport_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (dtStart.Value.Date > dtEnd.Value.Date)
-                {
-                    throw new UserException("Ngày bắt đầu phải sau ngay kết thúc");
-                }
-                else
-                {
-                    _wb = new XLWorkbook();
-                    // MessageBox.Show(dtStart.Value.Date + "|||" + dtEnd.Value.Date.AddHours(23.999)); // Test line
-                    var data = (
-                        from p in _purchasedHistoryDt
-                        join c in _customerInformationDt on p.customerId equals c.id
-                        where dtStart.Value.Date <= p.paidDate.Date &&
-                              p.paidDate.Date <= dtEnd.Value.Date.AddHours(23.999)
-                        select new
-                        {
-                            IDKháchHàng = c.id,
-                            Tên = c.name,
-                            SĐT = c.phone,
-                            Điểm = p.paidAmount,
-                            NgàyMua = p.paidDate
-                        });
-                    DataTable payment = ConvertToDataTable(data);
-                    _wb.AddWorksheet(payment, "Tổng kết");
-                    _wb.AddWorksheet(_customerDt, "Khách");
-
-
-                    var exportDialog = new SaveFileDialog
-                    {
-                        FileName = @"Summary",
-                        Filter = @"Excel files|*.xlsx",
-                        Title = @"Save an Excel File"
-                    };
-                    exportDialog.ShowDialog();
-                    if (!String.IsNullOrWhiteSpace(exportDialog.FileName)) _wb.SaveAs(exportDialog.FileName);
-                }
-            }
-            catch (UserException exception)
-            {
-                Console.WriteLine(exception);
-            }
-        }
 
         DataTable ConvertToDataTable<TSource>(IEnumerable<TSource> source)
         {
@@ -305,7 +333,6 @@ namespace customer
             source.ToList().ForEach(
                 i => dt.Rows.Add(props.Select(p => p.GetValue(i, null)).ToArray())
             );
-
             return dt;
         }
 
@@ -363,12 +390,95 @@ namespace customer
 
         private void lbIName_DoubleClick(object sender, EventArgs e)
         {
-            txtIName.Enabled = true;
+            if (!String.IsNullOrEmpty(txtIName.Text)) txtIName.Enabled = true;
         }
 
         private void lbIPhone_DoubleClick(object sender, EventArgs e)
         {
-            txtITel.Enabled = true;
+            if (!String.IsNullOrEmpty(txtITel.Text)) txtITel.Enabled = true;
+        }
+
+        private void btnDayExport_Click(object sender, EventArgs e)
+        {
+            var date = DateTime.Today;
+            try
+            {
+                _wb = new XLWorkbook();
+                // MessageBox.Show(dtStart.Value.Date + "|||" + dtEnd.Value.Date.AddHours(23.999)); // Test line
+                var data = (
+                    from p in _purchasedHistoryDt
+                    join c in _customerInformationDt on p.customerId equals c.id
+                    where p.paidDate == date.Date &&
+                          p.paidAmount < 0
+                    select new
+                    {
+                        ID = c.id,
+                        Tên = c.name,
+                        SĐT = c.phone,
+                        Đổi = p.paidAmount * -1,
+                        Món = "",
+                        Giá = "",
+                        // Điểm = p.paidAmount
+                    });
+                DataTable payment = ConvertToDataTable(data);
+                _wb.AddWorksheet(payment, "Tổng kết");
+                // _wb.AddWorksheet(_customerDt, "Khách");
+                var exportDialog = new SaveFileDialog
+                {
+                    FileName = @"TổngKết",
+                    Filter = @"Excel files|*.xlsx",
+                    Title = @"Save an Excel File"
+                };
+                exportDialog.ShowDialog();
+                if (!String.IsNullOrWhiteSpace(exportDialog.FileName)) _wb.SaveAs(exportDialog.FileName);
+            }
+            catch (UserException exception)
+            {
+                Console.WriteLine(exception);
+            }
+        }
+
+        private void btnMonthExport_Click(object sender, EventArgs e)
+        {
+            var date = DateTime.Today;
+            string temp = DateTime.Now.Year + "/" + DateTime.Now.Month + "/01";
+            var first = DateTime.Parse(temp);
+            try
+            {
+                _wb = new XLWorkbook();
+                // MessageBox.Show(dtStart.Value.Date + "|||" + dtEnd.Value.Date.AddHours(23.999)); // Test line
+                var data = (
+                    from p in _purchasedHistoryDt
+                    join c in _customerInformationDt on p.customerId equals c.id
+                    where p.paidDate <= date.Date &&
+                          p.paidDate >= first.Date &&
+                          p.paidAmount < 0
+                    select new
+                    {
+                        ID = c.id,
+                        Tên = c.name,
+                        SĐT = c.phone,
+                        Đổi = p.paidAmount * -1,
+                        Món = "",
+                        Giá = "",
+                        // Điểm = p.paidAmount
+                    });
+                DataTable payment = ConvertToDataTable(data);
+                _wb.AddWorksheet(payment, "Tổng kết");
+                // _wb.AddWorksheet(_customerDt, "Khách");
+                var exportDialog = new SaveFileDialog
+                {
+                    FileName = @"TổngKết",
+                    Filter = @"Excel files|*.xlsx",
+                    Title = @"Save an Excel File"
+                };
+                exportDialog.ShowDialog();
+                if (!String.IsNullOrWhiteSpace(exportDialog.FileName)) _wb.SaveAs(exportDialog.FileName);
+            }
+            catch (UserException exception)
+            {
+                Console.WriteLine(exception);
+            }
         }
     }
 }

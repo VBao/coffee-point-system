@@ -18,7 +18,7 @@ namespace customer
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            //Application.ThreadException += ThreadException;
+            Application.ThreadException += ThreadException;
             Application.Run(new FrmMain());
         }
 
